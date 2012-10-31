@@ -1,0 +1,128 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function block_styles_menu() {
+  $items['admin/config/user-interface/blockstyles'] = array(
+    'title' => 'Block styles configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_block_styles_admin_block_styles'),
+    'access arguments' => array('configure block_styles'),
+    'file' => 'block_styles.pages.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function block_styles_permission() {
+  return array(
+    'configure block_styles' =>  array(
+      'title' => t('Configure block styles'),
+      'description' => t('Configure block styles and their associated class'),
+    ),
+  );
+}
+
+/**
+ *
+ * Retrieve all presets
+ *
+ * @return array
+ */
+function block_styles_styles_info() {
+  $presets = variable_get('block_styles_presets', array());
+  $presets = explode("\n", $presets);
+  $presets = array_map('trim', $presets);
+  $presets = array_filter($presets, 'strlen');
+  $options = array();
+  foreach($presets as $preset) {
+    $preset = explode('|', $preset);
+    $options[$preset[0]] = $preset[1];
+  }
+  drupal_alter('block_styles_styles_info', $options);
+  return $options;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function block_styles_form_alter(&$form, &$form_state, $form_id) {
+  if ('block_admin_configure' == $form_id || 'block_add_block_form' == $form_id) {
+    // Add submit handler to save preset.
+    $form['#submit'][] = '_block_styles_handle_block_style_selection';
+    // Retrieving presets...
+    $options = block_styles_styles_info();
+    $options = array(NULL => t('-None-')) + $options;
+
+    /*
+     * Retrieve any block style associated with current block.
+     */
+    $default = NULL;
+    if ($form['delta']['#value']) {
+      $key = $form['module']['#value'].'_'.$form['delta']['#value'];
+      $default = _block_styles_get_block_styles($key);
+    }
+    $form['block_style'] = array(
+      '#weight' => -1,
+      '#type' => 'select',
+      '#title' => t('Block style'),
+      '#options' => $options,
+      '#default_value' => $default
+    );
+  }
+}
+
+/**
+ *
+ * Submit handler used to save block style submitted in block form.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function _block_styles_handle_block_style_selection($form, &$form_state) {
+  $blocksPresets = variable_get('block_styles_blocks', array());
+  $blockKey = $form_state['values']['module'].'_'.$form_state['values']['delta'];
+  $blocksPresets[$blockKey] = $form_state['values']['block_style'];
+  variable_set('block_styles_blocks', $blocksPresets);
+}
+
+
+/**
+ *
+ * Retrieves all block styles configured for every block, if any.
+ * Returns either a related block style, or NULL if there is no block style
+ * associated with a block.
+ * If key is omitted, returns all blocks styles indexed by key.
+ *
+ * @param null $delta
+ */
+function _block_styles_get_block_styles($key = NULL) {
+  $blocksPresets = variable_get('block_styles_blocks', array());
+  if ($key) {
+    return isset($blocksPresets[$key]) ? $blocksPresets[$key] : NULL;
+  }
+  else {
+    return $blocksPresets;
+  }
+}
+
+
+/**
+ *
+ * Retrieving eventual block style associated with block, assigning it to
+ * block classes.
+ *
+ * @param $vars
+ */
+function block_styles_preprocess_block(&$vars) {
+  $key = $vars['block']->module.'_'.$vars['block']->delta;
+  $style = _block_styles_get_block_styles($key);
+  if ($style) {
+    $vars['classes_array'][] = 'style-'.$style;
+  }
+}

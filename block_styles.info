@@ -1,0 +1,6 @@
+name = Block Styles
+description = Provides different block styles, adding specific class in specified blocks.
+core = 7.x
+dependencies[] = block
+files[] = block_styles.module
+configure = admin/blockstyles
